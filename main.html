@@ -1,0 +1,1606 @@
+<!DOCTYPE html>
+<html>
+	<head>
+		<meta content="text/html;charset=utf-8" http-equiv="Content-Type">
+		<meta content="utf-8" http-equiv="encoding">
+		<title>Welcome to the museum</title>
+		<style>
+			body { margin: 0; }
+		</style>
+	</head>
+	<body>
+  <script src = "https://cdnjs.cloudflare.com/ajax/libs/three.js/r123/three.js"></script>
+	<script src="OrbitControls.js"></script>
+
+	<script id="vertexShader" type="x-shader/x-vertex">
+
+		uniform highp float time;
+		uniform float level;
+		void main() {}
+	</script>
+	<script id="fragmentShader" type="x-shader/x-fragment">
+				// defining Blending functions
+				#define Blend(base, blend, funcf) 		vec3(funcf(base.r, blend.r), funcf(base.g, blend.g), funcf(base.b, blend.b), funcf(base.a, blend.a))
+				#define BlendAddthird(base, blend) 		min(base + (blend*0.3), vec3(1.0))
+				#define BlendAddtenth(base, blend) 		min(base + (blend*0.06), vec3(1.0))
+
+      	precision mediump float;
+        uniform vec2 resolution;
+        uniform vec2 mouse;
+        uniform highp float time;
+				uniform vec3 player_pos;
+				uniform float level;
+        float rand(vec2 pos) {
+                return sin(sin(dot(pos,vec2(time, time*10000.0)))* time * 10000000.);
+        }
+				float sandrand(vec2 pos) {
+								return sin(sin(dot(pos,vec2(time, time)))* time *10.);
+				}
+				vec3 addSand()
+				{
+
+						vec3 sandcolor = vec3(0.9606, 0.6601, 0.1445);
+						vec3 sandtexture = vec3(sandrand(gl_FragCoord.xy/1000.), gl_FragCoord.xy  / resolution.xy);
+						vec3 sandspecular = vec3(sandrand(gl_FragCoord.xy/2000.), gl_FragCoord.xy  / resolution.xy);
+						sandspecular.xyz = sandspecular.xxx*vec3(2,2,2);
+						float d = abs(gl_FragCoord.y - ((1.3 + sin(time))*20.0));
+						d = d*0.003;
+						d = pow(d,0.6);
+						d = min(d,1.0);
+						vec3 sandbase = BlendAddtenth(sandcolor,sandtexture);
+						vec3 darkensand = mix(sandtexture,vec3(0,0,0), d);
+						vec3 gradientgen = mix(sandspecular, darkensand, d);
+						vec3 finalmix = BlendAddthird(sandbase, gradientgen);
+						return finalmix;
+				}
+        void main(){
+					if(level == 0.){
+	        	vec2 pos = gl_FragCoord.xy/resolution;
+	         	vec2 intPart = vec2(0.);
+	         	vec2 floatPart = vec2(0.);
+	         	floatPart=fract(pos);
+	        	vec3 colour = vec3(rand(floatPart));
+	        	gl_FragColor = vec4(colour,1.0);
+        	}
+					if(level == 2.){
+						gl_FragColor = vec4(addSand(), 1.);
+					}
+				}
+
+
+	</script>
+
+	<script  id="waterFrag" type="x-shader/x-fragment">
+	precision highp float;
+	uniform vec2 resolution;
+	uniform vec2 mouse;
+	uniform highp float time;
+	uniform vec3 camera;
+	uniform float level;
+	varying vec3 vUv;
+	varying vec3 myNormal;
+	float rand(vec2 pos) {
+	        return sin(sin(dot(pos,vec2(time, time*10000.0)))* time * 10000000.);
+	}
+	void main(){
+	  // light from the top
+	 vec3 light = vec3(0.,0.,10.);
+	 vec3 lightColor = vec3(1.,1.,1.);
+	 vec3 objectColor = vec3(0., 0.3, 1.);
+
+	 //ambience
+	 float ambientStrength = 0.8;
+	 vec3 ambient = ambientStrength * lightColor;
+
+
+
+
+	 // Get the normal/direction of the light
+	 light = normalize(light - vUv);
+
+	 //specular
+	 float specularStrength = 0.4;
+	 vec3 viewDir = normalize(camera - vUv);
+	 //reflect
+	 vec3 reflectDir = reflect(-light, myNormal);
+	 float spec = pow(max(dot(viewDir, reflectDir), 0.0), 2.);
+	 vec3 specular = specularStrength * spec * lightColor;
+	 float diff = max(dot(myNormal, light), 0.0);
+	 vec3 diffuse = diff * lightColor;
+	 vec3 result = (ambient + diffuse + specular ) * objectColor;
+	 // float prod = dot(myNormal,light) + ambience;
+	       // This calculates angle and magnitude of light w.r.t normal.
+	 gl_FragColor = vec4(result, 0.8);
+	}
+ </script>
+	<script  id="waterVert" type="x-shader/x-vertex">
+
+	precision highp float;
+	uniform float time;
+	uniform vec2 mouse;
+	// uniform vec2 displaceCenter;
+	varying vec3 vUv;
+	varying vec3 myNormal;
+	float rand(vec2 pos) {
+					return sin(sin(dot(pos,vec2(time, position.x)))* time);
+	}
+	void main() {
+		// myNormal = normal;
+	  vec3 transformed = vec3(position);
+
+
+		float dx = position.x + rand(vec2(time, time))*0.05 + sin(time);
+		float dy = position.y + rand(vec2(time, time))*0.05 + cos(time);
+		//noise to add some realism
+		float freq = sqrt(dx*dx + dy*dy);
+		float amp = 0.1;
+		float angle = -time*10.0+freq*6.0/2.;
+		transformed.z += sin(angle)*amp;// *rand(mouse);
+		transformed.z += sin(angle+0.2)*amp;// *rand(mouse);
+		transformed.z += sin(angle+0.1) * amp;// *rand(mouse);
+		myNormal = normalize(transformed);
+		vec4 modelViewPosition = modelViewMatrix * vec4(transformed, 1.0);
+		gl_Position = projectionMatrix * modelViewPosition;
+
+	}
+ </script>
+
+ 	<script id="vertexShaderPerlin" type="x-shader/x-vertex">
+	precision highp float;
+	uniform highp float time;
+	varying vec3 vert_normal;
+	varying vec3 vert_pos;
+	vec4 permute(vec4 x){return mod(((x*34.0)+1.0)*x, 289.0);}
+	vec4 taylorInvSqrt(vec4 r){return 1.79284291400159 - 0.85373472095314 * r;}
+	vec3 fade(vec3 t) {return t*t*t*(t*(t*6.0-15.0)+10.0);}
+
+	float cnoise(vec3 P){
+	  vec3 Pi0 = floor(P); // Integer part for indexing
+	  vec3 Pi1 = Pi0 + vec3(1.0); // Integer part + 1
+	  Pi0 = mod(Pi0, 289.0);
+	  Pi1 = mod(Pi1, 289.0);
+	  vec3 Pf0 = fract(P); // Fractional part for interpolation
+	  vec3 Pf1 = Pf0 - vec3(1.0); // Fractional part - 1.0
+	  vec4 ix = vec4(Pi0.x, Pi1.x, Pi0.x, Pi1.x);
+	  vec4 iy = vec4(Pi0.yy, Pi1.yy);
+	  vec4 iz0 = Pi0.zzzz;
+	  vec4 iz1 = Pi1.zzzz;
+
+	  vec4 ixy = permute(permute(ix) + iy);
+	  vec4 ixy0 = permute(ixy + iz0);
+	  vec4 ixy1 = permute(ixy + iz1);
+
+	  vec4 gx0 = ixy0 / 7.0;
+	  vec4 gy0 = fract(floor(gx0) / 7.0) - 0.5;
+	  gx0 = fract(gx0);
+	  vec4 gz0 = vec4(0.5) - abs(gx0) - abs(gy0);
+	  vec4 sz0 = step(gz0, vec4(0.0));
+	  gx0 -= sz0 * (step(0.0, gx0) - 0.5);
+	  gy0 -= sz0 * (step(0.0, gy0) - 0.5);
+
+	  vec4 gx1 = ixy1 / 7.0;
+	  vec4 gy1 = fract(floor(gx1) / 7.0) - 0.5;
+	  gx1 = fract(gx1);
+	  vec4 gz1 = vec4(0.5) - abs(gx1) - abs(gy1);
+	  vec4 sz1 = step(gz1, vec4(0.0));
+	  gx1 -= sz1 * (step(0.0, gx1) - 0.5);
+	  gy1 -= sz1 * (step(0.0, gy1) - 0.5);
+
+	  vec3 g000 = vec3(gx0.x,gy0.x,gz0.x);
+	  vec3 g100 = vec3(gx0.y,gy0.y,gz0.y);
+	  vec3 g010 = vec3(gx0.z,gy0.z,gz0.z);
+	  vec3 g110 = vec3(gx0.w,gy0.w,gz0.w);
+	  vec3 g001 = vec3(gx1.x,gy1.x,gz1.x);
+	  vec3 g101 = vec3(gx1.y,gy1.y,gz1.y);
+	  vec3 g011 = vec3(gx1.z,gy1.z,gz1.z);
+	  vec3 g111 = vec3(gx1.w,gy1.w,gz1.w);
+
+	  vec4 norm0 = taylorInvSqrt(vec4(dot(g000, g000), dot(g010, g010), dot(g100, g100), dot(g110, g110)));
+	  g000 *= norm0.x;
+	  g010 *= norm0.y;
+	  g100 *= norm0.z;
+	  g110 *= norm0.w;
+	  vec4 norm1 = taylorInvSqrt(vec4(dot(g001, g001), dot(g011, g011), dot(g101, g101), dot(g111, g111)));
+	  g001 *= norm1.x;
+	  g011 *= norm1.y;
+	  g101 *= norm1.z;
+	  g111 *= norm1.w;
+
+	  float n000 = dot(g000, Pf0);
+	  float n100 = dot(g100, vec3(Pf1.x, Pf0.yz));
+	  float n010 = dot(g010, vec3(Pf0.x, Pf1.y, Pf0.z));
+	  float n110 = dot(g110, vec3(Pf1.xy, Pf0.z));
+	  float n001 = dot(g001, vec3(Pf0.xy, Pf1.z));
+	  float n101 = dot(g101, vec3(Pf1.x, Pf0.y, Pf1.z));
+	  float n011 = dot(g011, vec3(Pf0.x, Pf1.yz));
+	  float n111 = dot(g111, Pf1);
+
+	  vec3 fade_xyz = fade(Pf0);
+	  vec4 n_z = mix(vec4(n000, n100, n010, n110), vec4(n001, n101, n011, n111), fade_xyz.z);
+	  vec2 n_yz = mix(n_z.xy, n_z.zw, fade_xyz.y);
+	  float n_xyz = mix(n_yz.x, n_yz.y, fade_xyz.x);
+	  return 2.2 * n_xyz;
+	}
+
+	void main(){
+		// vec4 modelViewPosition = modelViewMatrix * position.xyz;
+		// gl_Position = projectionMatrix * modelViewPosition;
+		vec3 pos = vec3(position +cnoise(position*0.1 + time)*10.);
+		vert_pos = pos;
+		vert_normal = normalize(pos);
+		vec4 modelViewPosition = modelViewMatrix * vec4(pos, 1.0);
+		gl_Position = projectionMatrix * modelViewPosition;
+	}
+
+	</script>
+
+ 	</script>
+ 	<script id="fragmentShaderPerlin" type="x-shader/x-fragment">
+       	precision highp float;
+         uniform vec2 resolution;
+         uniform vec2 mouse;
+         uniform highp float time;
+ 				uniform vec3 camera;
+ 				uniform float level;
+ 				varying vec3 vert_normal;
+ 				varying vec3 vert_pos;
+         float rand(vec2 pos) {
+                 return sin(sin(dot(pos,vec2(time, time*10000.0)))* time * 10000000.);
+         }
+         void main(){
+ 					//Lets do PHONG again
+ 					vec3 lightColor = vec3(1., 1., 1.);
+ 					vec3 lightPos = vec3(0., 10., 1.);
+ 					vec3 objectColor = vec3(1., 0, 0.);
+
+ 					//AMBIENT
+ 					float ambientStrength = 0.6;
+ 			    vec3 ambient = ambientStrength * lightColor;
+
+
+ 					//DIFFUSE
+ 					vec3 lightDir = normalize(lightPos - gl_FragCoord.xyz);
+ 					float diff = max(dot(vert_normal, lightDir), 0.0);
+ 					vec3 diffuse = diff * lightColor;
+
+ 					//SPECULAR
+ 					float specularStrength = 0.5;
+ 					vec3 viewDir = normalize(camera.xyz - gl_FragCoord.xyz);
+ 					vec3 reflectDir = reflect(-lightDir, vert_normal);
+ 					float spec = pow(max(dot(viewDir, reflectDir), 0.0), 8.);
+ 					vec3 specular = specularStrength * spec * lightColor;
+
+ 			    vec3 result = (ambient+diffuse) * objectColor;
+ 			    gl_FragColor = vec4(result, 1.0);
+ 				}
+
+
+ 	</script>
+	<script id="vertexShaderFractal" type="x-shader/x-vertex">
+  precision highp float;
+	uniform mat4 modelViewProjectMatrixInverse;
+	varying vec3 rayDir;
+
+	void main() {
+	    gl_Position = vec4(position,1);
+	    vec4 WPpos = modelViewProjectMatrixInverse * gl_Position;
+	    WPpos /= WPpos.w;
+	    rayDir = WPpos.xyz - cameraPosition;
+	}
+
+	</script>
+	<script id="fragmentShaderFractal" type="x-shader/x-fragment">
+precision highp float;
+// COPYRIGHT INFO MOVED TO THE END OF THE FILE AFTER SOURCE!
+// Moved for the sake of editing convenience here:
+// - http://www.kinostudios.com/mandelbulb.html
+
+#define HALFPI 1.570796
+#define PI 3.141592653
+
+#define MIN_EPSILON 6e-7
+#define MIN_NORM 1.5e-7
+
+#define MAX_ITERATIONS 4
+#define minRange 6e-5
+
+// 10 a 200  "The maximum number of steps a ray should take."
+#define STEP_LIMIT 200
+
+// viewMatrix and cameraPosition are automatically included by THREE.js
+uniform mat4 modelMatrix;
+uniform mat4 modelViewMatrix;
+uniform float time;
+varying vec3 rayDir;
+
+const float width=600.0;//=512;
+const float height=600.0;//=512;
+const float pixelSize=1.0;//width/height;//1.0;
+const int   antialiasing=0;//"Super sampling quality. Number of samples squared per pixel.";
+const bool  phong=true;
+const float shadows=0.01;
+const float ambientOcclusion=0.9;
+const float ambientOcclusionEmphasis=0.98; //"Emphasise the structure edges based on the number of steps it takes to reach a point in the fractal.";
+const float bounding=1.5; //1->16 "Sets the bounding sphere radius to help accelerate the raytracing.";
+const float bailout=5.0; //0.5->12 //"Sets the bailout value for the fractal calculation. Lower values give smoother less detailed results.";
+
+const float power=4.0;//=8.0;//-20->20 // Power of fractal
+
+const vec3  light=vec3(38.0, -42.0, 38.0);
+const vec4  backgroundColor=vec4(0.0, 0.0, 0.0,1.0);
+const vec4  diffuseColor=vec4(0.0, 0.85, 0.99,1.0);
+const vec4  ambientColor=vec4(0.67, 0.85, 1.0,1.0);
+const vec4  lightColor=vec4(1., 1., 1.,0.0);
+const float colorSpread=0.2;//=0.2; // 0 -> // varier les couleurs
+const float rimLight=0.0;
+const float specularity=0.66;
+const float specularExponent=15.0;
+
+const float epsilonScale=1.0; // 0 a 1  "Scale the epsilon step distance. Smaller values are slower but will generate smoother results for thin areas.";
+
+const float phasex = 0.3;
+const float phasey = 0.1;
+
+const vec2 size = vec2(width, height);
+const float aspectRatio = size.x / size.y;
+// vec3 eye = (modelMatrix * vec4(cameraPosition, 1)).xyz;
+
+// Super sampling
+const float sampleStep = 1.0 / float(antialiasing + 1);
+const float sampleContribution = 1.0 / pow(float(antialiasing + 1), 2.0);
+const float pixel_scale = 1.0 / max(size.x, size.y);
+
+//time
+const float timeScale = 10.;
+// FROM: http://www.fractalforums.com/index.php?topic=16793.msg64299#msg64299
+float DE(vec3 z0, inout float min_dist){//MandelBulb by twinbee
+		vec2 phase=vec2(phasex+(time*timeScale)/16.0, phasey-(time*timeScale)/16.0);
+		vec4 z = vec4(z0,1.0), c = z;
+    float r = length(z.xyz),zr,theta,phi,p=power;//p is the power
+    phi = atan(z.y, z.x) * p;// th = atan(z.y, z.x) + phase.x; ...and here
+    theta = asin(z.z / r) * p;// ph = acos(z.z / r) + phase.y; add phase shifts here
+    min_dist = min(min_dist, r);
+    for (int n = 0; n < MAX_ITERATIONS; n++) {
+        zr = pow(r, p-1.0);
+        z=zr*vec4(r*vec3(sin(theta)*vec2(cos(phi),sin(phi)),cos(theta)),z.w*p)+c; // this version was from the forums
+        r = length(z.xyz);
+        min_dist = min(min_dist, r);
+        if (r > bailout) break;
+        phi = (atan(z.y, z.x) + phase.x) * p;// th = atan(z.y, z.x) + phase.x; ...and here
+        theta = (acos(z.z / r) + phase.y) * p;// ph = acos(z.z / r) + phase.y; add phase shifts here
+    }
+    return .5 * log(r) * r / z.w;
+}
+
+bool intersectBoundingSphere(vec3 origin,
+    vec3 direction,
+    out float tmin,
+    out float tmax)
+{
+    bool hit = false;
+
+    float b = dot(origin, direction);
+    float c = dot(origin, origin) - bounding*bounding;
+    float disc = b*b - c;         // discriminant
+    tmin = tmax = 0.0;
+
+    if (disc > 0.0) {
+        // Real root of disc, so intersection
+        float sdisc = sqrt(disc);
+
+        tmin=max(0.,-b - sdisc);//DE(origin + max(0.,t0) * direction, min_dist);//
+        tmax=max(0.,-b + sdisc);//max(0.,t0)+t1;
+        hit = true;
+    }
+
+    return hit;
+}
+
+// Calculate the gradient in each dimension from the intersection point
+vec3 estimate_normal(vec3 z, float e)
+{
+    float min_dst;   // Not actually used in this particular case
+    vec3 z1 = z + vec3(e, 0, 0);
+    vec3 z2 = z - vec3(e, 0, 0);
+    vec3 z3 = z + vec3(0, e, 0);
+    vec3 z4 = z - vec3(0, e, 0);
+    vec3 z5 = z + vec3(0, 0, e);
+    vec3 z6 = z - vec3(0, 0, e);
+
+    float dx = DE(z1, min_dst) - DE(z2, min_dst);
+    float dy = DE(z3, min_dst) - DE(z4, min_dst);
+    float dz = DE(z5, min_dst) - DE(z6, min_dst);
+
+    return normalize(vec3(dx, dy, dz) / (2.0*e));
+}
+
+
+// Computes the direct illumination for point pt with normal N due to
+// a point light at light and a viewer at eye.
+vec3 Phong(vec3 pt, vec3 N, out float specular)
+{
+    vec3 diffuse   = vec3(0);         // Diffuse contribution
+    vec3 color   = vec3(0);
+    specular = 0.0;
+
+    // vec3 L = normalize(light * objRotation - pt); // find the vector to the light
+    vec3 L = normalize((modelMatrix * vec4(light,1)).xyz - pt);
+    float  NdotL = dot(N, L);         // find the cosine of the angle between light and normal
+
+    if (NdotL > 0.0) {
+        // Diffuse shading
+        diffuse = diffuseColor.rgb + abs(N) * colorSpread;
+        diffuse *= lightColor.rgb * NdotL;
+
+        // Phong highlight
+        vec3 E = normalize(cameraPosition - pt);      // find the vector to the eye
+        vec3 R = L - 2.0 * NdotL * N;      // find the reflected vector
+        float  RdE = dot(R,E);
+
+        if (RdE <= 0.0) {
+            specular = specularity * pow(abs(RdE), specularExponent);
+        }
+    } else {
+        diffuse = diffuseColor.rgb * abs(NdotL) * rimLight;
+    }
+
+    return (ambientColor.rgb * ambientColor.a) + diffuse;
+}
+
+// Define the ray direction from the pixel coordinates
+vec3 rayDirection(vec2 p)
+{
+    vec3 direction = vec3( 2.0 * aspectRatio * p.x / float(size.x) - aspectRatio,
+        -2.0 * p.y / float(size.y) + 1.0,
+        // -2.0 * exp(cameraZoom)
+        0.0);
+    // return normalize(direction * viewRotation * objRotation);
+    return normalize((modelViewMatrix * vec4(direction,1)).xyz);
+    // return normalize((viewMatrix * vec4(direction,1)).xyz);
+}
+
+// Calculate the output colour for each input pixel
+vec4 renderPixel(vec3 ray_direction)
+{
+    float tmin, tmax;
+    vec4 pixel_color = backgroundColor;
+
+    if (intersectBoundingSphere(cameraPosition, ray_direction, tmin, tmax)) {
+        vec3 ray = cameraPosition + tmin * ray_direction;
+
+        float dist, ao;
+        float min_dist = 2.0;
+        float ray_length = tmin;
+        float eps = MIN_EPSILON;
+
+        // number of raymarching steps scales inversely with factor
+        int max_steps = int(float(STEP_LIMIT) / epsilonScale);
+        int i;
+        float f;
+
+        for (int l = 0; l < STEP_LIMIT; ++l) {
+            dist = DE(ray, min_dist);
+
+            // March ray forward
+            f = epsilonScale * dist;
+            ray += f * ray_direction;
+            ray_length += f * dist;
+
+            // Are we within the intersection threshold or completely missed the fractal
+            if (dist < eps || ray_length > tmax) {
+                break;
+            }
+
+            // Set the intersection threshold as a function of the ray length away from the camera
+            //eps = max(max(MIN_EPSILON, eps_start), pixel_scale * pow(ray_length, epsilonScale));
+            eps = max(MIN_EPSILON, pixel_scale * ray_length);
+            i++;
+        }
+
+
+        // Found intersection?
+        if (dist < eps) {
+            ao   = 1.0 - clamp(1.0 - min_dist * min_dist, 0.0, 1.0) * ambientOcclusion;
+
+            if (phong) {
+                vec3 normal = estimate_normal(ray, eps/2.0);
+                float specular = 0.0;
+                pixel_color.rgb = Phong(ray, normal, specular);
+
+                if (shadows > 0.0) {
+                    // The shadow ray will start at the intersection point and go
+                    // towards the point light. We initially move the ray origin
+                    // a little bit along this direction so that we don't mistakenly
+                    // find an intersection with the same point again.
+                    // vec3 light_direction = normalize((light - ray) * objRotation);
+                    vec3 light_direction = normalize(modelMatrix * vec4(light - ray, 1)).xyz;
+                    ray += normal * eps * 2.0;
+
+                    float min_dist2;
+                    dist = 4.0;
+
+                    for (int j = 0; j < STEP_LIMIT; ++j) {
+                        dist = DE(ray, min_dist2);
+
+                        // March ray forward
+                        f = epsilonScale * dist;
+                        ray += f * light_direction;
+
+                        // Are we within the intersection threshold or completely missed the fractal
+                        if (dist < eps || dot(ray, ray) > bounding * bounding)
+                            break;
+                    }
+
+                    // Again, if our estimate of the distance to the set is small, we say
+                    // that there was a hit and so the source point must be in shadow.
+                    if (dist < eps) {
+                        pixel_color.rgb *= 1.0 - shadows;
+                    } else {
+                        // Only add specular component when there is no shadow
+                        pixel_color.rgb += specular;
+                    }
+                } else {
+                    pixel_color.rgb += specular;
+                }
+            } else {
+                // Just use the base colour
+                pixel_color.rgb = diffuseColor.rgb;
+            }
+
+            ao *= 1.0 - (float(i) / float(max_steps)) * ambientOcclusionEmphasis * 2.0;
+            pixel_color.rgb *= ao;
+            // if (length(pixel_color.rgb) >= 0.98)
+            //     pixel_color.r = 0.0;
+            pixel_color.a = 1.0;
+        }
+// #ifdef DEBUG_COLORS
+//         else
+//         {
+//             // some debugging to show the difference
+//             vec3 ray2 = eye + tmin * ray_direction;
+//             pixel_color.r = DE_blog    (ray2, tmin) / bailout;
+//             pixel_color.g = DE_original(ray2, tmin) / bailout;
+//             pixel_color.b = DE         (ray2, tmin) / bailout;
+//         }
+// #endif
+    }
+    else
+    {
+        pixel_color = vec4(0.,0,0,0);
+    }
+
+    return pixel_color;
+}
+
+void main() {
+    gl_FragColor = renderPixel(normalize(rayDir));
+}
+
+
+	</script>
+
+	<script id="vertexShaderMandelbox" type="x-shader/x-vertex">
+	precision highp float;
+	uniform mat4 modelViewProjectMatrixInverse;
+	varying vec3 rayDir;
+
+	void main() {
+			gl_Position = vec4(position,1);
+			vec4 WPpos = modelViewProjectMatrixInverse * gl_Position;
+			WPpos /= WPpos.w;
+			rayDir = WPpos.xyz - cameraPosition;
+	}
+
+	</script>
+	<script id="fragmentShaderMandelbox" type="x-shader/x-fragment">
+precision highp float;
+// COPYRIGHT INFO MOVED TO THE END OF THE FILE AFTER SOURCE!
+// Moved for the sake of editing convenience here:
+// - http://www.kinostudios.com/mandelbulb.html
+
+#define HALFPI 1.570796
+#define PI 3.141592653
+
+#define MIN_EPSILON 6e-7
+#define MIN_NORM 1.5e-7
+
+#define MAX_ITERATIONS 4
+#define minRange 6e-5
+
+// 10 a 200  "The maximum number of steps a ray should take."
+#define STEP_LIMIT 200
+
+// viewMatrix and cameraPosition are automatically included by THREE.js
+uniform mat4 modelMatrix;
+uniform mat4 modelViewMatrix;
+uniform float time;
+varying vec3 rayDir;
+
+const float width=600.0;//=512;
+const float height=600.0;//=512;
+const float pixelSize=1.0;//width/height;//1.0;
+const int   antialiasing=0;//"Super sampling quality. Number of samples squared per pixel.";
+const bool  phong=true;
+const float shadows=0.0;
+const float ambientOcclusion=0.9; //0.9
+const float ambientOcclusionEmphasis=.98; //0.98"Emphasise the structure edges based on the number of steps it takes to reach a point in the fractal.";
+const float bounding=4.; //1->16 "Sets the bounding sphere radius to help accelerate the raytracing.";
+const float bailout=.7; //0.5->12 //"Sets the bailout value for the fractal calculation. Lower values give smoother less detailed results.";
+//bailout orig 5
+const float power=4.;//=8.0;//-20->20 // Power of fractal
+
+const vec3  light=vec3(38.0, -42.0, 38.0);
+const vec4  backgroundColor=vec4(0.0, 0.0, 0.0,0.0);
+const vec4  diffuseColor=vec4(0.5, 0.5, 0.5,1.0);
+const vec4  ambientColor=vec4(0.5, 0.5, 0.5,1.);
+const vec4  lightColor=vec4(1., 1., 1.,0.0);
+const float colorSpread=0.;//=0.2; // 0 -> // varier les couleurs
+const float rimLight=0.0;
+const float specularity=0.66; //0.66
+const float specularExponent=.5; //15
+
+const float epsilonScale=1.0; // 0 a 1  "Scale the epsilon step distance. Smaller values are slower but will generate smoother results for thin areas.";
+
+const float phasex = 0.;
+const float phasey = 0.;
+
+const vec2 size = vec2(width, height);
+const float aspectRatio = size.x / size.y;
+// vec3 eye = (modelMatrix * vec4(cameraPosition, 1)).xyz;
+
+// Super sampling
+const float sampleStep = 1.0 / float(antialiasing + 1);
+const float sampleContribution = 1.0 / pow(float(antialiasing + 1), 2.0);
+const float pixel_scale = 1.0 / max(size.x, size.y);
+
+// FROM: http://www.fractalforums.com/index.php?topic=16793.msg64299#msg64299
+
+//THIS CREATES THE FRACTAL
+/*
+
+J. C. Hart, D. J. Sandin, and L. H. Kauffman. 1989.
+Ray tracing deterministic 3-D fractals
+DOI:https://doi.org/10.1145/74334.74363
+ORIGINAL PAPER ------^
+
+*/
+
+float DE(vec3 pos, inout float min_dist){
+	float DEfactor = 5.;
+	float scale = .1;
+
+	float fixedRadius = 4.0;
+	float fR2 = fixedRadius * fixedRadius;
+	float minRadius = 0.5;
+	float mR2 = minRadius * minRadius;
+	float x = pos.x;
+	float y = pos.y;
+	float z = pos.z;
+
+	vec3 c = vec3(0.,0.,0.);
+
+	for (int n = 0; n < MAX_ITERATIONS; n++) {
+
+
+		if (x > 1.0)
+		x = 2.0 - x;
+		else if (x < -1.0) x = -2.0 - x;
+		if (y > 1.0)
+		y = 2.0 - y;
+		else if (y < -1.0) y = -2.0 - y;
+		if (z > 1.0)
+		z = 2.0 - z;
+		else if (z < -1.0) z = -2.0 - z;
+
+		float r2 = x*x + y*y + z*z;
+
+		if (r2 < mR2)
+		{
+			 x = x * fR2 / mR2;
+			 y = y * fR2 / mR2;
+			 z = z * fR2 / mR2;
+			 DEfactor = DEfactor * fR2 / mR2;
+		}
+		else if (r2 < fR2)
+		{
+			 x = x * fR2 / r2;
+			 y = y * fR2 / r2;
+			 z = z * fR2 / r2;
+			 DEfactor *= fR2 / r2;
+		}
+
+		x = x * scale + c.x;
+		y = y * scale + c.y;
+		z = z * scale + c.z;
+		DEfactor *= scale;
+
+
+	}
+	float distance = sqrt(x*x+y*y+z*z)/abs(DEfactor);
+	min_dist = min(min_dist, distance); //minimum distance (to be used later)
+	return distance;
+}
+
+//if the camera hits the sphere that surrounds the fractal
+bool intersectBoundingSphere(vec3 origin,
+		vec3 direction,
+		out float tmin,
+		out float tmax)
+{
+		bool hit = false;
+
+		float b = dot(origin, direction);
+		float c = dot(origin, origin) - bounding*bounding;
+		float disc = b*b - c;         // discriminant
+		tmin = tmax = 0.0;
+
+		if (disc > 0.0) {
+				// Real root of disc, so there is anintersection
+				float sdisc = sqrt(disc);
+
+				tmin=max(0.,-b - sdisc);//DE(origin + max(0.,t0) * direction, min_dist);//
+				tmax=max(0.,-b + sdisc);//max(0.,t0)+t1;
+				hit = true;
+		}
+
+		return hit;
+}
+
+// Calculate the gradient in each dimension from the intersection point
+vec3 estimate_normal(vec3 z, float e)
+{
+		float min_dst;   // Not actually used in this particular case
+		vec3 z1 = z + vec3(e, 0, 0);
+		vec3 z2 = z - vec3(e, 0, 0);
+		vec3 z3 = z + vec3(0, e, 0);
+		vec3 z4 = z - vec3(0, e, 0);
+		vec3 z5 = z + vec3(0, 0, e);
+		vec3 z6 = z - vec3(0, 0, e);
+
+		float dx = DE(z1, min_dst) - DE(z2, min_dst);
+		float dy = DE(z3, min_dst) - DE(z4, min_dst);
+		float dz = DE(z5, min_dst) - DE(z6, min_dst);
+
+		return normalize(vec3(dx, dy, dz) / (2.0*e));
+}
+
+
+// Computes the direct illumination for point pt with normal N due to
+// a point light at light and a viewer at eye.
+vec3 Phong(vec3 pt, vec3 N, out float specular)
+{
+		vec3 diffuse   = vec3(0);         // Diffuse contribution
+		vec3 color   = vec3(0);
+		specular = 0.0;
+
+		// vec3 L = normalize(light * objRotation - pt); // find the vector to the light
+		vec3 L = normalize((modelMatrix * vec4(light,1)).xyz - pt);
+		float  NdotL = dot(N, L);         // find the cosine of the angle between light and normal
+
+		if (NdotL > 0.0) {
+				// Diffuse shading
+				diffuse = diffuseColor.rgb + abs(N) * colorSpread;
+				diffuse *= lightColor.rgb * NdotL;
+
+				// Phong highlight
+				vec3 E = normalize(cameraPosition - pt);      // find the vector to the eye
+				vec3 R = L - 2.0 * NdotL * N;      // find the reflected vector
+				float  RdE = dot(R,E);
+
+				if (RdE <= 0.0) {
+						specular = specularity * pow(abs(RdE), specularExponent);
+				}
+		} else {
+				diffuse = diffuseColor.rgb * abs(NdotL) * rimLight;
+		}
+
+		return (ambientColor.rgb * ambientColor.a) + diffuse;
+}
+
+// Define the ray direction from the pixel coordinates
+vec3 rayDirection(vec2 p)
+{
+		vec3 direction = vec3( 2.0 * aspectRatio * p.x / float(size.x) - aspectRatio,
+				-2.0 * p.y / float(size.y) + 1.0,
+				// -2.0 * exp(cameraZoom)
+				0.0);
+		// return normalize(direction * viewRotation * objRotation);
+		return normalize((modelViewMatrix * vec4(direction,1)).xyz);
+		// return normalize((viewMatrix * vec4(direction,1)).xyz);
+}
+
+// Calculate the output colour for each input pixel
+vec4 renderPixel(vec3 ray_direction)
+{
+		float tmin, tmax; //thresholds for intersection
+		vec4 pixel_color = backgroundColor;
+
+		//if the light ray intersects bounding sphere
+		if (intersectBoundingSphere(cameraPosition, ray_direction, tmin, tmax)) {
+				vec3 ray = cameraPosition + tmin * ray_direction;
+
+				float dist, ao;
+				float min_dist = 2.0;
+				float ray_length = tmin;
+				float eps = MIN_EPSILON;
+
+				// number of raymarching steps scales inversely with factor
+				int max_steps = int(float(STEP_LIMIT) / epsilonScale);
+				int i; //number of steps (used for ambient occlusion)
+				float f;
+
+				//this marches the way forward STEP_LIMIT times
+				for (int l = 0; l < STEP_LIMIT; ++l) {
+						dist = DE(ray, min_dist);
+
+						f = epsilonScale * dist;
+						ray += f * ray_direction;
+						ray_length += f * dist;
+
+						// Are we within the intersection threshold or completely missed the fractal
+						//if so, stop marching
+						if (dist < eps || ray_length > tmax) {
+								break;
+						}
+
+						// Set the intersection threshold as a function of the ray length away from the camera
+						//	eps = max(max(MIN_EPSILON, eps_start), pixel_scale * pow(ray_length, epsilonScale));
+						eps = max(MIN_EPSILON, pixel_scale * ray_length);
+						i++;
+				}
+
+
+				// Found intersection? ie: is the "distance" within the threshold
+				if (dist < eps) {
+						ao   = 1.0 - clamp(1.0 - min_dist * min_dist, 0.0, 1.0) * ambientOcclusion;
+
+						if (phong) {
+								vec3 normal = estimate_normal(ray, eps/2.0);
+								float specular = 0.0;
+								pixel_color.rgb = Phong(ray, normal, specular);
+
+								if (shadows > 0.0) {
+										// The shadow ray will start at the intersection point and go
+										// towards the point light. We initially move the ray origin
+										// a little bit along this direction so that we don't mistakenly
+										// find an intersection with the same point again.
+										// vec3 light_direction = normalize((light - ray) * objRotation);
+										vec3 light_direction = normalize(modelMatrix * vec4(light - ray, 1)).xyz;
+										ray += normal * eps * 2.0;
+
+										float min_dist2;
+										dist = 4.0;
+
+										for (int j = 0; j < STEP_LIMIT; ++j) {
+												dist = DE(ray, min_dist2);
+
+												// March ray forward
+												f = epsilonScale * dist;
+												ray += f * light_direction;
+
+												// Are we within the intersection threshold or completely missed the fractal
+												if (dist < eps || dot(ray, ray) > bounding * bounding)
+														break;
+										}
+
+										// Again, if our estimate of the distance to the set is small, we say
+										// that there was a hit and so the source point must be in shadow.
+										if (dist < eps) {
+												pixel_color.rgb *= 1.0 - shadows;
+										} else {
+												// Only add specular component when there is no shadow
+												pixel_color.rgb += specular;
+										}
+								} else {
+										pixel_color.rgb += specular;
+								}
+						} else {
+								// Just use the base colour, ie: no PHONG
+								pixel_color.rgb = diffuseColor.rgb;
+						}
+
+						ao *= 1.0 - (float(i) / float(max_steps)) * ambientOcclusionEmphasis * 2.0;
+						pixel_color.rgb *= ao;
+						pixel_color.rgb *= 3.;
+						// if (length(pixel_color.rgb) >= 0.98)
+						//     pixel_color.r = 0.0;
+						pixel_color.a = 1.0;
+				}
+}
+		else //if pixel does not intersect bounding sphere (ie background image)
+		{
+				pixel_color = vec4(0,0,0,0);
+		}
+
+		return pixel_color;
+}
+
+void main() {
+		gl_FragColor = renderPixel(normalize(rayDir));
+}
+
+
+	</script>
+		<script>
+			const scene = new THREE.Scene();
+			const camera = new THREE.PerspectiveCamera( 75, window.innerWidth / window.innerHeight, 0.1, 100 );
+
+			const renderer = new THREE.WebGLRenderer();
+			renderer.shadowMap.enabled = true;
+			renderer.setSize( window.innerWidth, window.innerHeight );
+			document.body.appendChild( renderer.domElement );
+			const controls = new THREE.OrbitControls( camera, renderer.domElement );
+			const playerHeight = 5;
+			const speed = 5;
+			var level = 0;
+
+			var loader = new THREE.FontLoader();
+			var level11Added = false;
+			var level12Added = false;
+			var level13Added = false;
+			var level14Added = false;
+			var level15Added = false;
+			var level16Added = false;
+			var level17Added = false;
+			var level18Added = false;
+			var level19Added = false;
+
+
+
+			var fractalMesh;
+			var fractal2Mesh;
+			var modelViewProjectMatrixInverse = new THREE.Matrix4();
+
+			var objectsInScene = []; //ground
+			var textInScene = [];
+
+			//shader stuff
+			var uniforms;
+			const fs = document.getElementById('fragmentShader').textContent;
+			const vs = document.getElementById('vertexShader').textContent;
+
+
+			function init(){
+				uniforms = { time: { type: 'f', value: 1.0 }, resolution: { type: 'v2', value: new THREE.Vector2() }, mouse: {type: "v2", value: new THREE.Vector2()},
+				camera: {type: "v3", value: new THREE.Vector3()}, level: {type: 'f', value: 0.0}, modelViewProjectMatrixInverse: { type: "m4", value: [] } };
+
+				camera.position.z = 10;
+				uniforms.camera.value = camera.position;
+				controls.update();
+				controls.enablePan = false;
+
+				onWindowResize();
+				window.addEventListener('resize', onWindowResize, false);
+				window.addEventListener('mousemove', onMouseMove, false);
+				window.addEventListener('keydown', checkKey, false);
+
+				addBaseLevel();
+
+			}
+			init();
+			var time =0;
+			const animate = function () {
+				requestAnimationFrame( animate );
+
+				if(level11Added && uniforms.level.value == 1.0){
+					animateLine();
+				}
+				if(level13Added && uniforms.level.value == 3.0){
+					updateTesseract(-speed*(level-50));
+				}
+				if(level14Added && uniforms.level.value == 4.0){
+					boringCube.position.x = Math.sin(uniforms.time.value) * 2;
+					boringCube.rotation.x += 0.01;
+					boringCube.rotation.y -= 0.005;
+					boringCube.rotation.z += 0.02;
+				}
+				if(level16Added){
+					if(uniforms.level.value == 6.0){
+						updateGame = true;
+					}
+					else{
+						updateGame = false;
+					}
+				}
+				if(level17Added && uniforms.level.value == 7.0){
+					modelViewProjectMatrixInverse.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(fractalMesh.matrixWorld);
+					modelViewProjectMatrixInverse.invert();
+					uniforms.modelViewProjectMatrixInverse.value = modelViewProjectMatrixInverse;
+					camera.updateMatrixWorld();
+				}
+
+				if(level18Added && uniforms.level.value == 8.0){
+					modelViewProjectMatrixInverse.multiplyMatrices(camera.projectionMatrix, camera.matrixWorldInverse).multiply(fractal2Mesh.matrixWorld);
+					modelViewProjectMatrixInverse.invert();
+					uniforms.modelViewProjectMatrixInverse.value = modelViewProjectMatrixInverse;
+					camera.updateMatrixWorld();
+				}
+
+				controls.update();
+				uniforms.time.value += 0.01;
+				uniforms.camera.value = camera.position;
+				renderer.render( scene, camera );
+				time ++;
+			};
+
+			function onWindowResize(event) {
+			renderer.setSize(window.innerWidth, window.innerHeight);
+			uniforms.resolution.value.x = renderer.domElement.width;
+			uniforms.resolution.value.y = renderer.domElement.height;
+
+			}
+			function onMouseMove( event ) {
+        	uniforms.mouse.value.x = 2 * ( event.clientX / window.innerWidth );
+ 	        uniforms.mouse.value.y = 2 * ( 1-(event.clientY) / window.innerHeight
+ 	        );
+      }
+
+			animate();
+
+
+
+			function checkKey(e) {
+			    var event = window.event ? window.event : e;
+					uniforms.camera.value = camera.position;
+					console.log(level);
+					if(level >= 0 && level < 14){
+						uniforms.level.value = 0.0;
+						console.log("level 0");
+					}
+					else if(level >= 14 && level < 28){
+						if(!level11Added){
+							level11Added = true;
+							addLevel11();
+						}
+						uniforms.level.value = 1.0;
+					}
+					else if(level >= 28 && level < 35){
+						if(!level12Added){
+							level12Added = true;
+							addLevel12();
+						}
+						uniforms.level.value = 2.0;
+					}
+					else if(level >= 50 && level < 64){
+						if(!level13Added){
+							level13Added = true;
+							addLevel13();
+						}
+						uniforms.level.value = 3.0;
+					}
+					else if(level >= 64 && level < 78){
+						if(!level14Added){
+							level14Added = true;
+							addLevel14();
+						}
+						uniforms.level.value = 4.0;
+					}
+					else if(level >= 78 && level < 92){
+						if(!level15Added){
+							level15Added = true;
+							addLevel15();
+						}
+						uniforms.level.value = 5.0;
+					}
+					else if(level >= 92 && level < 140){
+						if(!level16Added){
+							level16Added = true;
+							addLevel16();
+						}
+						uniforms.level.value = 6.0;
+					}
+					else if(level >= 140 && level < 154){
+						if(!level17Added){
+							addLevel17();
+						}
+						uniforms.level.value = 7.0;
+					}
+					else if(level >= 154 && level < 178){
+						if(!level18Added){
+							addLevel18();
+						}
+						uniforms.level.value = 8.0;
+					}
+			    switch(event.keyCode){
+			       //W
+			      case 87:
+							for(let i = 0; i < objectsInScene.length; i++){
+								objectsInScene[i].position.y -= speed;
+							}
+							for(let i = 0; i < textInScene.length; i++){
+								textInScene[i].translateZ(speed);
+							}
+							for(let i = 0; i < textInScene.length; i++){
+								//artefacts[i].position.y += speed;
+						 }
+							 level++;
+			        break;
+			       //D
+			      case 68:
+			        break;
+			       //S
+			      case 83:
+							 for(let i = 0; i < objectsInScene.length; i++){
+								 objectsInScene[i].position.y += speed;
+							 }
+							 for(let i = 0; i < textInScene.length; i++){
+								 textInScene[i].translateZ(-speed);
+							 }
+ 							for(let i = 0; i < textInScene.length; i++){
+ 						//		artefacts[i].position.y -= speed;
+ 						 }
+							 level --;
+			        break;
+			        //A
+			      case 65:
+			        break;
+			       //CTRL
+			      case 17:
+			        //camera.position.z -= 1;
+			        break;
+			       //SHIFT
+			      case 16:
+			        //camera.position.z += 2;
+			        break;
+			    }
+			}
+
+	function addText(paragraph){
+
+		loader.load('https://cdn.rawgit.com/mrdoob/three.js/master/examples/fonts/helvetiker_regular.typeface.json', function(font) {
+		var textGeometry = new THREE.TextGeometry(paragraph, {
+			font: font,
+			size: 80,
+			height: 5,
+			curveSegments: 5
+		});
+
+		var material = new THREE.MeshBasicMaterial({
+			color: 0x00FF00
+		});
+		var textMesh = new THREE.Mesh(textGeometry, material);
+		textMesh.position.set(camera.position.x - 10, camera.position.y+10, camera.position.z-10);
+		textMesh.scale.multiplyScalar(0.01);
+		textMesh.lookAt( camera.position );
+
+		scene.add(textMesh);
+		textInScene.push(textMesh);
+	});
+	}
+
+	function addGround(material){
+		const geometry = new THREE.PlaneGeometry( 100, 100, 1 ,1); //(width, height, widthSegments, heightSegments)
+		//const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+		var ground = new THREE.Mesh( geometry, material );
+		scene.add(ground);
+		ground.rotation.x = Math.PI/2;
+		ground.rotation.y = Math.PI ;
+		ground.position.y = -playerHeight;
+		objectsInScene.push(ground);
+	}
+
+	function addBaseLevel(){
+		//const material = new THREE.MeshBasicMaterial( { color: 0x00ff00 } );
+		var material = new THREE.ShaderMaterial({ uniforms: uniforms, fragmentShader: fs});
+		addGround(material);
+		addText('Welcome to the museum of impossible artefacts\n\nHere you will find some oddities I have collected\nthrough my travels between space and time \n\nTo explore, please go up (W) or down (S)\n\nEnjoy........');
+	}
+
+	var line;
+	var MAX_POINTS = 1000;
+	var drawCount;
+	function addLevel11(){
+		console.log("level 11 added");
+		addText("Level 1:\nThe line that draws itself.\n\nPlease be patient\nit is rather shy.");
+		const material = new THREE.MeshBasicMaterial( { color: 0x367589} );
+		addGround(material);
+
+		// geometry
+		var geometry_ = new THREE.BufferGeometry();
+
+		// attributes
+		var positions = new Float32Array( MAX_POINTS * 3 ); // 3 vertices per point
+		geometry_.addAttribute( 'position', new THREE.BufferAttribute( positions, 3 ) );
+
+		// drawcalls
+		drawCount = 2; // draw the first 2 points, only
+		geometry_.setDrawRange( 0, drawCount );
+
+		// material
+		var material_ = new THREE.LineBasicMaterial( { color: 0xff0000, linewidth: 5 } );
+
+		// line
+		line = new THREE.Line( geometry_,  material_);
+		scene.add( line );
+
+		objectsInScene.push(line);
+		updateLinePosition();
+	}
+
+	function updateLinePosition(){
+		var positions = line.geometry.attributes.position.array;
+
+		var x = y = z = index = 0;
+
+		for ( var i = 0, l = MAX_POINTS; i < l; i ++ ) {
+
+			positions[ index ++ ] = x;
+			positions[ index ++ ] = y;
+			positions[ index ++ ] = z;
+
+			x += ( Math.random() - 0.5 ) * 1;
+			y += ( Math.random() - 0.5 ) * 1;
+			z += ( Math.random() - 0.5 ) * 1;
+
+		}
+
+	}
+
+	function animateLine(){
+		drawCount = ( drawCount + 1 ) % MAX_POINTS;
+
+		line.geometry.setDrawRange( 0, drawCount );
+
+		if ( drawCount === 0 ) {
+
+			updateLinePosition();
+
+			line.geometry.attributes.position.needsUpdate = true; // required after the first render
+			line.material.color.setHSL( Math.random(), 1, 0.5 );
+		}
+	}
+	//sand level with water on the wall
+	function addLevel12(){
+		console.log("level 12 added");
+		addText("Level 2:\nWater on the walls\n\nCrazy how it flows that way\ndefying gravity");
+		var material = new THREE.ShaderMaterial({ uniforms: uniforms, fragmentShader: fs});
+		let waterWall = new WaterWall(50,50);
+		waterWall.addWaterWall();
+		// waterWall.moveY(20);
+		waterWall.moveX(-40);
+		waterWall.moveY(20);
+		// waterWall.moveY(10);
+		waterWall.rotateZ(-Math.PI/2);
+
+		let waterWall2 = new WaterWall(50,50);
+		waterWall2.addWaterWall();
+		waterWall2.moveY(20);
+		waterWall2.moveX(40);
+		waterWall2.rotateZ(Math.PI/2);
+		addGround(material);
+	}
+
+
+	function addLevel13(){
+			console.log("level 11 added");
+			addText("Level 3:\nThe tesseract\n\nA f******* tesseract\nVery tricky to find indeed");
+			const material = new THREE.MeshBasicMaterial( { color: 0x111111} );
+			addGround(material);
+			addTesseract();
+	}
+	var vertices;
+	var edges;
+	var vertexMeshes;
+	var edgeMeshes = [];
+
+	// cylinder geometry along y-axis by default
+	var yAxis = new THREE.Vector3( 0, 1, 0 );
+
+	var t = 0;
+
+	function addTesseract(){
+
+
+			var scale = .5;
+
+			vertices = [ [ scale, scale, scale, scale ] ];
+			vertices.forEach( v => vertices.push( [ -v[0], v[1], v[2], v[3] ] ) );
+			vertices.forEach( v => vertices.push( [ v[0], -v[1], v[2], v[3] ] ) );
+			vertices.forEach( v => vertices.push( [ v[0], v[1], -v[2], v[3] ] ) );
+			vertices.forEach( v => vertices.push( [ v[0], v[1], v[2], -v[3] ] ) );
+
+			edges = [];
+			for ( var i = 0 ; i < 16 ; i += 2 ) edges.push( [ i, i+1 ] );
+			for ( var i = 0 ; i < 16 ; i += 4 ) edges.push( [ i, i+2 ], [ i+1, i+3 ] );
+			for ( var i = 0 ; i < 16 ; i += 8 )
+				edges.push( [ i, i+4 ], [ i+1, i+5 ], [ i+2, i+6 ], [ i+3, i+7 ] );
+			for ( var i = 0 ; i < 8 ; i++ ) edges.push( [ i, i+8 ] );
+
+			var geometry = new THREE.SphereGeometry( .05, 20, 20 );
+			var material = new THREE.MeshNormalMaterial();
+			vertexMeshes = [];
+			for ( var i = 0 ; i < vertices.length ; i++ ) {
+
+				var mesh = new THREE.Mesh( geometry, material );
+				vertexMeshes.push( mesh );
+				objectsInScene.push(mesh);
+				scene.add( mesh );
+
+			}
+}
+
+
+	function updateTesseract(yOff){
+		for ( var i = 0 ; i < vertices.length ; i++ ) {
+
+			var v = vertices[i];
+			var vx = Math.cos(t) * v[0] - Math.sin(t) * v[3];
+			var vw = Math.sin(t) * v[0] + Math.cos(t) * v[3];
+
+			var r = 1 / ( 1 - vw );
+			vertexMeshes[i].position.set( r*vx, r*v[1]+yOff, r*v[2] );
+		}
+
+		edgeMeshes.forEach( e => { e.geometry.dispose(); scene.remove(e);} );
+		edgeMeshes = [];
+
+		for ( var i = 0 ; i < edges.length ; i++ ) {
+
+			var v1 = vertexMeshes[ edges[i][0] ];
+			var v2 = vertexMeshes[ edges[i][1] ];
+			var d = v1.position.clone().sub( v2.position );
+
+			var geometry = new THREE.CylinderGeometry( .04, .04, d.length() );
+
+			var material = new THREE.MeshNormalMaterial();
+			var mesh = new THREE.Mesh( geometry, material );
+
+			// position from average of vertex positions
+			var p = v1.position.clone().add( v2.position ).divideScalar( 2 );
+			mesh.position.set( p.x, p.y, p.z );
+
+			// direction relative to y-axis
+			var angle = d.angleTo( yAxis );
+			var norm = d.cross
+
+			( yAxis ).normalize();
+			mesh.geometry.vertices.forEach( v => v.applyAxisAngle( norm, -angle ) );
+
+			edgeMeshes.push( mesh );
+			//objectsInScene.push(mesh);
+			scene.add( mesh );
+
+		}
+
+		t += .01;
+	}
+
+	var boringCube;
+	function addLevel14(){
+			console.log("level 14 added");
+			addText("Level 4:\nJust a regular cube\n\nBut hey it's floating\nI guess");
+			const material = new THREE.MeshBasicMaterial( { color: 0x111111} );
+			addGround(material);
+
+			const geometry = new THREE.BoxGeometry(5,5,5,5);
+			const material_ = new THREE.MeshBasicMaterial( { color: 0x222222} );
+			boringCube = new THREE.Mesh(geometry, material_);
+			scene.add(boringCube);
+			objectsInScene.push(boringCube);
+
+	}
+	function addLevel15(){
+			console.log("level 15 added");
+			addText("Level 5:\nRed Blobs\n\nIf you watch closely\nit's a dance of sorts");
+			const material = new THREE.MeshBasicMaterial( { color: 0x111111} );
+			addGround(material);
+
+			const geometry = new THREE.SphereGeometry( 5, 128,128);
+			const material_ = new THREE.ShaderMaterial( {uniforms: uniforms, vertexShader:document.getElementById('vertexShaderPerlin').textContent
+			, fragmentShader: document.getElementById('fragmentShaderPerlin').textContent} );
+			const sphere = new THREE.Mesh( geometry, material_ );
+			sphere.position.z = -20;
+			sphere.position.y = 10;
+			scene.add( sphere );
+			objectsInScene.push(sphere);
+
+			const sphere2 = new THREE.Mesh( geometry, material_ );
+			sphere2.position.z = -20;
+			sphere2.position.x = -20;
+			sphere2.position.y = 10;
+			scene.add( sphere2 );
+			objectsInScene.push(sphere2);
+
+			const sphere3 = new THREE.Mesh( geometry, material_ );
+			sphere3.position.x = -20;
+			sphere3.position.y = 10;
+			scene.add( sphere3 );
+			objectsInScene.push(sphere3);
+	}
+	var alive_index = [];
+	var cubeMeshes = [];
+	var updateGame;
+	const width = 10;
+	const height = 10;
+	const depth = 10;
+	function addLevel16(){
+					console.log("level 16 added");
+				addText("Level 6:\nGame of life\n\nThey only survive if they have \n2,3,4 neighbours\n\nWould you call this life? \nI wouldn't know");
+		const material = new THREE.MeshBasicMaterial( { color: 0x111111} );
+		addGround(material);
+
+		//setup cubes
+		const light = new THREE.AmbientLight( 0x404040 ); // soft white light
+		scene.add( light );
+
+		for(let i =-width/2; i < width/2; i++){ //x
+			for(let j =-height/2; j < height/2; j++){ //y
+				for(let k =-depth/2; k < depth/2; k++){ //z
+					const geometry = new THREE.BoxGeometry(5,5,5,5);
+					const material_ = new THREE.MeshPhongMaterial( {  color:0x009900,transparent: true, opacity: 1} );
+					material.transparent = true;
+					material.needsUpdate = true;
+					var cube = new THREE.Mesh(geometry, material_);
+					var alive =  Math.random() < 0.5;
+					alive_index.push(alive);
+					cubeMeshes.push(cube);
+					if(!alive){
+						cube.material.opacity = 0;
+						// cube.material.color.setHex( 0x000099);
+
+					}
+					cube.position.x = i * 15;
+					cube.position.y = j * 15 + height*10;
+					cube.position.z = k * 15;
+					scene.add(cube);
+					objectsInScene.push(cube);
+				}
+			}
+		}
+
+		setInterval(updateGOL, 1000)
+
+	}
+
+	function getIndex(x,y,z){
+		if(x >= width || x <0 || y >= height || y <0 || z >= depth || z <0 ){
+			return Math.floor(Math.random() * width);  ; // hacky to save code later
+		}
+		return z + height *y + (width)*(width)*x;
+	}
+
+
+	/*
+	a living cell remains alive only when surrounded by 2 or 3 living neighbors,
+	otherwise it dies of loneliness or overcrowding.
+	A dead cell comes to life when it has exactly 3 living neighbors.
+	*/
+	var ticks = 0;
+	function updateGOL(){
+		if(updateGame){
+			for(let i =0; i < width; i++){ //x
+				for(let j =0; j < height; j++){ //y
+					for(let k =0; k < depth; k++){ //z
+						if(ticks % 20 == 0){
+							console.log("resetting");
+							alive_index[getIndex(i,j,k)] = Math.random() < 0.5;
+							var cube = cubeMeshes[getIndex(i,j,k)];
+							if(!alive_index[getIndex(i,j,k)]){
+								cube.material.color.setHex( Math.random() * 0xffffff);
+
+								cube.material.transparent = true;
+								cube.material.needsUpdate = true;
+
+									cube.material.opacity = 1;
+							}
+							else{
+								 cube.material.color.setHex( Math.random() * 0xffffff );
+								cube.material.transparent = true;
+								cube.material.needsUpdate = true;
+
+									cube.material.opacity = 0;
+							}
+						}else{
+							var cube = cubeMeshes[getIndex(i,j,k)];
+							var alive = alive_index[getIndex(i,j,k)];
+
+							var aliveNeighbours = 0;
+
+							aliveNeighbours+=alive_index[getIndex(i+1, j, k)] ? 1 : 0;
+							aliveNeighbours+=alive_index[getIndex(i-1, j, k)]? 1 : 0;
+
+							aliveNeighbours+=alive_index[getIndex(i, j-1, k)]? 1 : 0;
+							aliveNeighbours+=alive_index[getIndex(i, j+1, k)]? 1 : 0;
+
+							aliveNeighbours+=alive_index[getIndex(i, j, k+1)]? 1 : 0;
+							aliveNeighbours+=alive_index[getIndex(i, j, k-1)]? 1 : 0;
+
+							if(alive){
+								if(aliveNeighbours!= 2 && aliveNeighbours !=3 && aliveNeighbours !=4){
+									//dead
+									alive_index[getIndex(i,j,k)] = false;
+									// cube.material.color.setHex( 0x000099);
+
+									cube.material.transparent = true;
+									cube.material.needsUpdate = true;
+									cube.material.opacity = 0;
+
+								}
+							}
+							else{
+								if(aliveNeighbours == 3){
+									//resurrected
+									alive_index[getIndex(i,j,k)] = true;
+									cube.material.color.setHex( Math.random() * 0xffffff );
+									cube.material.transparent = true;
+									cube.material.needsUpdate = true;
+									cube.material.opacity = 1;
+								}
+							}
+
+						}
+				}
+				}
+			}
+
+			ticks++;
+	}
+	}
+
+		function addLevel17(){
+			addText("Level 7:\nA fractal\n\nA proud entity\n\nStand in the right place\nin the right way\nand it might reveal itself\nto you\n(If it does, don't \nbe afraid to zoom in)");
+			const material_ = new THREE.MeshBasicMaterial( { color: 0x000000} );
+
+			addGround(material_);
+			const fs_fractal = document.getElementById('fragmentShaderFractal').textContent;
+			const vs_fractal = document.getElementById('vertexShaderFractal').textContent;
+
+			const material = new THREE.ShaderMaterial( {uniforms: uniforms, vertexShader: vs_fractal, fragmentShader: fs_fractal} );
+			material.needsUpdate = true;
+			material.transparent = true;
+			fractalMesh = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), material );
+
+			level17Added = true; //has to come after fractalMesh init
+			scene.add( fractalMesh )
+			objectsInScene.push(fractalMesh);
+		}
+
+		function addLevel18(){
+			addText("Level 8:\nA box fractal\n\nSame rules apply");
+			const material_ = new THREE.MeshBasicMaterial( { color: 0x000000} );
+
+			addGround(material_);
+			const fs_fractal = document.getElementById('fragmentShaderMandelbox').textContent;
+			const vs_fractal = document.getElementById('vertexShaderMandelbox').textContent;
+
+			const material = new THREE.ShaderMaterial( {uniforms: uniforms, vertexShader: vs_fractal, fragmentShader: fs_fractal} );
+			material.needsUpdate = true;
+			material.transparent = true;
+			fractal2Mesh = new THREE.Mesh( new THREE.PlaneGeometry( 2, 2 ), material );
+
+			level18Added = true; //has to come after fractalMesh init
+			scene.add( fractal2Mesh )
+			objectsInScene.push(fractal2Mesh);
+		}
+
+	function addLevel19(){
+		// Create a sine-like wave
+		addText("Level 9:\nSpline\n\n\nSpline");
+		const material = new THREE.MeshBasicMaterial( { color: 0x111111} );
+		addGround(material);
+		const curve = new THREE.SplineCurve( [
+			new THREE.Vector2( -10, 0 ),
+			new THREE.Vector2( -5, 5 ),
+			new THREE.Vector2( 0, 0 ),
+			new THREE.Vector2( 5, -5 ),
+			new THREE.Vector2( 10, 0 )
+		] );
+
+		const points = curve.getPoints( 50 );
+		const geometry = new THREE.BufferGeometry().setFromPoints( points );
+
+		const material_ = new THREE.LineBasicMaterial( { color : 0xff0000 } );
+
+		// Create the final object to add to the scene
+		const splineObject = new THREE.Line( geometry, material_ );
+		scene.add( splineObject );
+		objectsInScene.push(splineObject);
+	}
+	//TODO: have a "leak" in basement that lets 4d entities come through
+	//TODO: crash game after u get out of hell
+
+		</script>
+
+		<script src="water_wall.js"> </script>
+	</body>
+</html>
